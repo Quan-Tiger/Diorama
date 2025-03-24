@@ -2,9 +2,19 @@
     "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
     "name": "hello-world",
     "version-string": "0.0.1",
-    "dependencies": [
-        "commonlibsse-ng",
-        "simpleini",
-        "nlohmann-json"
-    ]
+  "dependencies": [
+    "commonlibsse-ng",
+    "simpleini",
+    "nlohmann-json",
+    "glm",
+    "efsw",
+    {
+      "name": "imgui",
+      "features": [
+        "dx11-binding",
+        "win32-binding"
+      ],
+      "version>=": "1.91.5"
+    }
+  ]
 }

@@ -1,8 +1,10 @@
 set(headers ${headers}
 	include/PCH.h 
     include/Plugin.h
+	include/Lib/Globals.h
+    include/Lib/Hooks.h
+	include/Lib/InputManager.h
     include/Lib/Logger.h
-    src/util.h
-    src/hook.h 
-    src/settings.h
+	include/Lib/Menu.h
+	include/Lib/Settings.h
 )

@@ -1,6 +1,5 @@
 #include <Plugin.h>
 
-
 void OnDataLoaded()
 {
    
@@ -10,16 +9,17 @@ void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 {
 	switch (a_msg->type) {
 	case SKSE::MessagingInterface::kDataLoaded:
-        
+		globals::OnInit();
+		InputManager::GetSingleton()->Init();
 		break;
 	case SKSE::MessagingInterface::kPostLoad:
 		break;
-	case SKSE::MessagingInterface::kPreLoadGame:
+	case SKSE::MessagingInterface::kPostPostLoad:
+		Settings::GetSingleton()->LoadSettings(Settings::ini_mem_path);
+		Hooks::Install();
 		break;
 	case SKSE::MessagingInterface::kPostLoadGame:
         break;
-	case SKSE::MessagingInterface::kNewGame:
-		break;
 	}
 }
 

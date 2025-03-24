@@ -63,6 +63,9 @@ endif()
 
 # Setup your SKSE plugin as an SKSE plugin!
 find_package(CommonLibSSE CONFIG REQUIRED)
+find_package(imgui CONFIG REQUIRED)
+find_package(efsw CONFIG REQUIRED)
+
 add_commonlibsse_plugin(
     ${PROJECT_NAME} 
     AUTHOR AUTHOR_NAME
@@ -82,6 +85,13 @@ target_include_directories(
 		${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
+target_link_libraries(
+	${PROJECT_NAME}
+	PRIVATE
+    efsw::efsw
+	imgui::imgui
+	DXGI.lib
+)
 
 file(
   GLOB_RECURSE
