@@ -1,76 +1,88 @@
 # ---------------------------------------------------- #
+#                 Required envs assert                 #
+# ---------------------------------------------------- #
+
+#if(NOT DEFINED ENV{COMMONLIB_SSE_FOLDER})
+#  message(FATAL_ERROR "Missing COMMONLIB_SSE_FOLDER environment variable")
+#endif()
+
+# ---------------------------------------------------- #
 #               Imports and definitions                #
 # ---------------------------------------------------- #
 
 include(cmake/headerlist.cmake)
 include(cmake/sourcelist.cmake)
 
-# It's recommended to set a minimum CMake version.
-# If you use CMake features from higher versions, update this to match.
 cmake_minimum_required(VERSION 3.21)
-set(AUTHOR_NAME "QuanTiger")
 set(PRODUCT_NAME "Diorama")
-
-# Set your project name. This will be the name of your SKSE .dll file.
-project(${PRODUCT_NAME} VERSION 0.0.1.0 LANGUAGES CXX)
+set(AUTHOR_NAME "QuanTiger")
+set(BEAUTIFUL_NAME "Diorama - Plugin Creation Engine")
+project(Diorama VERSION 0.0.1 LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
+list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 
 # ---------------------------------------------------- #
 #                      Resources                       #
 # ---------------------------------------------------- #
 
-configure_file(
-	${CMAKE_CURRENT_SOURCE_DIR}/cmake/version.rc.in
-	${CMAKE_CURRENT_BINARY_DIR}/version.rc
-	@ONLY
-)
-
-
-set(RESOURCE_FILE ${CMAKE_CURRENT_BINARY_DIR}/version.rc)
-set(RESOURCE_OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/version.res) 
-
-add_custom_command(
-    OUTPUT ${RESOURCE_OUTPUT}
-    COMMAND rc /fo ${RESOURCE_OUTPUT} ${RESOURCE_FILE}
-    DEPENDS ${RESOURCE_FILE}
-)
-
-add_custom_target(Resource ALL DEPENDS ${RESOURCE_OUTPUT})
+#configure_file(
+#    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/version.rc.in
+#    ${CMAKE_CURRENT_BINARY_DIR}/version.rc
+#    @ONLY)
+#
+#set(RESOURCE_FILE ${CMAKE_CURRENT_BINARY_DIR}/version.rc)
+#set(RESOURCE_OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/version.res)
+#
+#add_custom_command(
+#    OUTPUT ${RESOURCE_OUTPUT}
+#    COMMAND rc /fo ${RESOURCE_OUTPUT} ${RESOURCE_FILE}
+#    DEPENDS ${RESOURCE_FILE}
+#)
+#
+#add_custom_target(Resource ALL DEPENDS ${RESOURCE_OUTPUT})
 
 # ---------------------------------------------------- #
-#                        Output                        #
+#                Plugin Configuration                  #
 # ---------------------------------------------------- #
 
-# If you're not using a mod manager, you probably want the SKSE plugin to go
-# inside of your Skyrim "Data" folder.
-#
-# To do this automatically, set the `SKYRIM_FOLDER` environment variable
-# to the path of your Skyrim Special Edition folder
-if(DEFINED ENV{SKYRIM_FOLDER} AND IS_DIRECTORY "$ENV{SKYRIM_FOLDER}/Data")
-    set(OUTPUT_FOLDER "$ENV{SKYRIM_FOLDER}/Data")
-endif()
+include(FetchContent)
 
-# If you're using Mod Organizer 2 or Vortex, you might want this to go inside
-# of your "mods" folder, inside of a subfolder named "<your mod>".
-#
-# To do this automatically, set the `SKYRIM_MODS_FOLDER` environment variable
-# to the path of your "mods" folder
-if(DEFINED ENV{SKYRIM_MODS_FOLDER} AND IS_DIRECTORY "$ENV{SKYRIM_MODS_FOLDER}")
-    set(OUTPUT_FOLDER "$ENV{SKYRIM_MODS_FOLDER}/${PROJECT_NAME} ${CMAKE_BUILD_TYPE}")
-endif()
+set(ENABLE_SKYRIM_SE ON CACHE BOOL " " FORCE)
+set(ENABLE_SKYRIM_AE ON CACHE BOOL " " FORCE)
+set(ENABLE_SKYRIM_VR OFF CACHE BOOL " " FORCE)
+set(BUILD_TESTS OFF CACHE BOOL " " FORCE)
 
-# Otherwise, you can set OUTPUT_FOLDER to any place you'd like :)
-# set(OUTPUT_FOLDER "C:/path/to/any/folder")
+add_subdirectory("$ENV{COMMONLIB_SSE_FOLDER}" ${CMAKE_CURRENT_BINARY_DIR}/_deps/clib-build)
+get_target_property(COMMONLIB_SRC_DIR CommonLibSSE SOURCE_DIR)
 
-# Setup your SKSE plugin as an SKSE plugin!
-find_package(CommonLibSSE CONFIG REQUIRED)
+find_path(CLIB_UTIL_INCLUDE_DIRS "ClibUtil/utils.hpp")
+
+#file(
+#  GLOB_RECURSE
+#  sources
+#  ${CMAKE_CURRENT_BINARY_DIR}/version.rc
+#  ${sources}
+#)
+
+source_group(
+  TREE ${CMAKE_CURRENT_SOURCE_DIR}
+  FILES ${headers} ${sources}
+)
+
+include(${COMMONLIB_SRC_DIR}/cmake/CommonLibSSE.cmake)
+
+#find_package(CommonLibSSE CONFIG REQUIRED)
+find_package(directxtk CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
 find_package(efsw CONFIG REQUIRED)
 
 add_commonlibsse_plugin(
-    ${PROJECT_NAME} 
-    AUTHOR AUTHOR_NAME
-    SOURCES ${headers} ${sources} # <--- specifies plugin.cpp
-) 
+  ${PROJECT_NAME}
+  AUTHOR AUTHOR_NAME
+  SOURCES ${headers} ${sources}
+)
 
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_23) # <--- use C++23 standard
 target_precompile_headers(${PROJECT_NAME} PRIVATE include/PCH.h) # <--- PCH.h is required!
@@ -93,12 +105,19 @@ target_link_libraries(
 	DXGI.lib
 )
 
-file(
-  GLOB_RECURSE
-  SOURCES
-  ${CMAKE_CURRENT_BINARY_DIR}/version.rc
-  ${SOURCE_FILES}
-)
+if(DEFINED ENV{SKYRIM_FOLDER} AND IS_DIRECTORY "$ENV{SKYRIM_FOLDER}/Data")
+    set(OUTPUT_FOLDER "$ENV{SKYRIM_FOLDER}/Data")
+endif()
+
+# If you're using Mod Organizer 2 or Vortex, you might want this to go inside
+# of your "mods" folder, inside of a subfolder named "<your mod>".
+#
+# To do this automatically, set the `SKYRIM_MODS_FOLDER` environment variable
+# to the path of your "mods" folder
+if(DEFINED ENV{SKYRIM_MODS_FOLDER} AND IS_DIRECTORY "$ENV{SKYRIM_MODS_FOLDER}")
+    set(OUTPUT_FOLDER "$ENV{SKYRIM_MODS_FOLDER}/${PROJECT_NAME} ${CMAKE_BUILD_TYPE}")
+endif()
+
 
 # When your SKSE .dll is compiled, this will automatically copy the .dll into your mods folder.
 # Only works if you configure DEPLOY_ROOT above (or set the SKYRIM_MODS_FOLDER environment variable)
@@ -109,6 +128,9 @@ if(DEFINED OUTPUT_FOLDER)
     # Copy the SKSE plugin .dll files into the SKSE/Plugins/ folder
     set(DLL_FOLDER "${OUTPUT_FOLDER}/SKSE/Plugins")
 
+    set (CONFIG_FOLDER "Template_Plugin")
+    set(SRC_CONFIG_FOLDER "${CMAKE_SOURCE_DIR}/config")
+    
     message(STATUS "SKSE plugin output folder: ${DLL_FOLDER}")
 
     add_custom_command(
@@ -118,7 +140,14 @@ if(DEFINED OUTPUT_FOLDER)
         COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:${PROJECT_NAME}>" "${DLL_FOLDER}/$<TARGET_FILE_NAME:${PROJECT_NAME}>"
         VERBATIM
     )
-
+    if (EXISTS "${SRC_CONFIG_FOLDER}")
+        add_custom_command(
+            TARGET "${PROJECT_NAME}"
+            POST_BUILD
+            COMMAND "${CMAKE_COMMAND}" -E copy_directory_if_different "${CMAKE_SOURCE_DIR}/config" "${DLL_FOLDER}/${CONFIG_FOLDER}"
+            VERBATIM
+        )
+    endif()
     # If you perform a "Debug" build, also copy .pdb file (for debug symbols)
     if(CMAKE_BUILD_TYPE STREQUAL "Debug")
         add_custom_command(

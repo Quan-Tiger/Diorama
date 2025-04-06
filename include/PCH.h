@@ -10,6 +10,7 @@
 
 #include "imgui.h"
 #include "imgui_internal.h"
+#include "imgui_stdlib.h"
 
 namespace logger = SKSE::log;
 using namespace std::literals;
@@ -21,6 +22,9 @@ const RefID player_refid = 20;
 
 using SharedLock = std::shared_mutex;
 using WriteLocker = std::unique_lock<SharedLock>;
+
+#include <nlohmann/json.hpp>
+using json = nlohmann::json;
 
 namespace stl
 {

@@ -3,11 +3,15 @@
     "name": "hello-world",
     "version-string": "0.0.1",
   "dependencies": [
-    "commonlibsse-ng",
+    "commonlibsse-ng-fork",
+    "directxtk",
     "simpleini",
     "nlohmann-json",
     "glm",
     "efsw",
+    "spdlog",
+    "rapidcsv",
+    "rsm-binary-io",
     {
       "name": "imgui",
       "features": [

@@ -4,9 +4,11 @@
 class Settings
 {
 	public:
-		void GetIni(const std::filesystem::path& a_path, const std::function<void(CSimpleIniA&)> a_func);
+		void GetIni(const std::filesystem::path& a_path, const std::function<void(const std::filesystem::path&, CSimpleIniA&)> a_func);
 		void LoadSettings(const std::filesystem::path& a_path);
 		void LoadMasterIni(CSimpleIniA& a_ini);
+		void SaveMasterIni(CSimpleIniA& a_ini);
+		void SaveSettings(const std::filesystem::path& a_path);
 
 		static inline Settings* GetSingleton()
 		{
@@ -14,12 +16,15 @@ class Settings
 			return std::addressof(singleton);
 		}
 
-		static inline const std::filesystem::path ini_mem_path = "Data/Diorama/Diorama.ini";
+		static inline const std::string main_path = "Data/Diorama";
+		static inline const std::string ini_path = main_path + "/Diorama.ini";
+		static inline const std::string json_path = main_path + "/json";
 
 		struct Config
 		{
 			uint32_t showMenuKey = 209;
 			uint32_t showMenuModifier = 0;
+			std::string selectedProfile = "";
 			bool pauseGame = false;
 			bool disableInMenu = false;
 		};

@@ -32,8 +32,9 @@ namespace globals
 			renderer = RE::BSGraphics::Renderer::GetSingleton();
 		}
 
-		d3d::device = reinterpret_cast<ID3D11Device*>(game::renderer->GetSingleton()->data.forwarder);
-		d3d::context = reinterpret_cast<ID3D11DeviceContext*>(game::renderer->GetSingleton()->data.context);
-		d3d::swapChain = reinterpret_cast<IDXGISwapChain*>(game::renderer->GetSingleton()->data.renderWindows->swapChain);
+		auto renderer = game::renderer->GetSingleton();
+		d3d::device = reinterpret_cast<ID3D11Device*>(renderer->GetRuntimeData().forwarder);
+		d3d::context = reinterpret_cast<ID3D11DeviceContext*>(renderer->GetRuntimeData().context);
+		d3d::swapChain = reinterpret_cast<IDXGISwapChain*>(renderer->GetRuntimeData().renderWindows->swapChain);
 	}
 }

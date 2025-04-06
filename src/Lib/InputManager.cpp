@@ -42,15 +42,6 @@ void InputManager::ProcessInputEvents(RE::InputEvent* const* a_events)
     }
 }
 
-void InputManager::ToggleMenu(RE::ButtonEvent* button) {
-}
-
-bool InputManager::ShouldSwallowInput()
-{
-	//return IsEnabled;
-	return false;
-}
-
 void InputManager::ProcessInputEventQueue() {
 	ProcessQueue();
 }
@@ -58,30 +49,42 @@ void InputManager::ProcessInputEventQueue() {
 void InputManager::ProcessQueue()
 {
 	std::unique_lock<std::shared_mutex> mutex(_inputEventMutex);
-	//ImGuiIO& io = ImGui::GetIO();
+
+	if (_keyEventQueue.empty()) {
+		return;
+	}
+
+	if (ImGui::GetCurrentContext() == nullptr) {
+		return;
+	}
+
+	ImGuiIO& io = ImGui::GetIO();
 	for (auto& event : _keyEventQueue) {
 		if (event.eventType == RE::INPUT_EVENT_TYPE::kChar) {
-			//io.AddInputCharacter(event.keyCode);
+			io.AddInputCharacter(event.keyCode);
 			continue;
 		}
 
-		//if (event.device == RE::INPUT_DEVICE::kMouse) {
-		//	logger::trace("Detect mouse scan code {} value {} pressed: {}", event.keyCode, event.value, event.IsPressed());
-		//	if (event.keyCode > 7) {  // middle scroll
-		//		io.AddMouseWheelEvent(0, event.value * (event.keyCode == 8 ? 1 : -1));
-		//	}
-		//	else {
-		//		if (event.keyCode > 5)
-		//			event.keyCode = 5;
-		//		io.AddMouseButtonEvent(event.keyCode, event.IsPressed());
-		//	}
-		//}
-
-		if (event.device == RE::INPUT_DEVICE::kKeyboard) {
+		if (event.device == RE::INPUT_DEVICE::kMouse) {
+			if (globals::menuOpen) {
+				//logger::trace("Detect mouse scan code {} value {} pressed: {}", event.keyCode, event.value, event.IsPressed());
+				if (event.keyCode > 7) {  // middle scroll
+					io.AddMouseWheelEvent(0, event.value * (event.keyCode == 8 ? 1 : -1));
+				}
+				else {
+					if (event.keyCode > 5)
+						event.keyCode = 5;
+					io.AddMouseButtonEvent(event.keyCode, event.IsPressed());
+				}
+			}
+		}
+		else if (event.device == RE::INPUT_DEVICE::kKeyboard) {
 			if (!event.IsPressed()) {
 				if (event.keyCode == showMenuKey) {
-					logger::info("Toggle key pressed");
-					globals::menuOpen = !globals::menuOpen;
+					if (!globals::menuOpen) {
+						//Diorama::SelectObjectInView();
+					}
+					Menu::GetSingleton()->Toggle();
 				}
 			}
 		}

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Lib/Menu.h"
+#include "UI/Menu.h"
 #include "Lib/InputManager.h"
 
 namespace globals

@@ -1,6 +1,9 @@
 #pragma once
 
 #include "Lib/Settings.h"
+#include "Lib/Raycast.h"
+#include "Lib/Misc.h"
+#include "Diorama.h";
 
 class InputManager {
     public:
@@ -17,8 +20,6 @@ class InputManager {
         void AddEventToQueue(RE::InputEvent** a_event);
         void ProcessInputEvents(RE::InputEvent* const* a_events);
 		void ProcessInputEventQueue();
-		void ToggleMenu(RE::ButtonEvent* button);
-		bool ShouldSwallowInput();
 
     private:
 		InputManager() = default;

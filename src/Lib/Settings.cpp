@@ -1,7 +1,7 @@
 #include "Lib/Settings.h"
 #include "SimpleIni.h"
 
-void Settings::GetIni(const std::filesystem::path& a_path, const std::function<void(CSimpleIniA&)> a_func)
+void Settings::GetIni(const std::filesystem::path& a_path, const std::function<void(const std::filesystem::path&, CSimpleIniA&)> a_func)
 {
 	CSimpleIniA ini;
 
@@ -20,7 +20,7 @@ void Settings::GetIni(const std::filesystem::path& a_path, const std::function<v
 		}
 	}
 
-	a_func(ini);
+	a_func(a_path, ini);
 
 	(void)ini.SaveFile(wide_path.c_str());
 }
@@ -43,16 +43,7 @@ T GetIniValue(CSimpleIniA& a_ini, const char* section, const char* key, T a_defa
 		return a_default;
 	}
 
-	// A+ plus de-serialization.
-	/*if constexpr (std::is_same_v<T, ImVec4>) {
-		auto color = Settings::GetColor<T>(value);
-		return (color.second ? color.first : a_default);
-	}
-	else if constexpr (std::is_same_v<T, ImVec2>) {
-		auto vec = Settings::GetVec2(value);
-		return (vec.second ? vec.first : a_default);
-	}
-	else*/ if constexpr (std::is_same_v<T, std::string>) {
+	if constexpr (std::is_same_v<T, std::string>) {
 		return value;
 	}
 	else if constexpr (std::is_same_v<T, bool>) {
@@ -67,20 +58,14 @@ T GetIniValue(CSimpleIniA& a_ini, const char* section, const char* key, T a_defa
 	else if constexpr (std::is_same_v<T, float>) {
 		return std::stof(value);
 	}
-	//else if constexpr (std::is_same_v<T, GraphicManager::Image>) {
-	//	return GraphicManager::GetImage(value);
-	//}
-	//else if constexpr (std::is_same_v<T, Language::GlyphRanges>) {
-	//	return Language::GetGlyphRange(value);
-	//}
 	else {
-		logger::error("[Settings] Unhandled type passed to GET_VALUE in Menu.cpp!");
+		logger::error("Unhandled type passed to GetIniValue in Menu.cpp.");
 		return a_default;
 	}
 }
 
 void Settings::LoadSettings(const std::filesystem::path& a_path) {
-	GetIni(a_path, [](CSimpleIniA& a_ini) {
+	GetIni(a_path, [](const std::filesystem::path& a_path, CSimpleIniA& a_ini) {
 		Settings::GetSingleton()->LoadMasterIni(a_ini);
 	});
 }
@@ -89,13 +74,22 @@ void Settings::LoadMasterIni(CSimpleIniA& a_ini)
 {
 	auto& _default = def;
 
-	//config.showMenuKey = a_ini.GetValue(;// 209;
 	config.showMenuKey = GetIniValue<uint32_t>(a_ini, "Input", "ShowMenuKey", _default.showMenuKey);
-	logger::info("Found value in ini {}", config.showMenuKey);
-	/*auto& _default = def.config;
+	config.selectedProfile = GetIniValue<std::string>(a_ini, "Profiles", "Current", _default.selectedProfile);
+}
 
-	config.showMenuKey = GET_VALUE<uint32_t>(rSections[Main], "ShowMenuKey", _default.showMenuKey, a_ini);
-	config.showMenuModifier = GET_VALUE<uint32_t>(rSections[Main], "ShowMenuModifier", _default.showMenuModifier, a_ini);
-	config.pauseGame = GET_VALUE<bool>(rSections[Main], "PauseGame", _default.pauseGame, a_ini);
-	config.disableInMenu = GET_VALUE<bool>(rSections[Main], "DisableInMenu", _default.disableInMenu, a_ini);*/
+void Settings::SaveSettings(const std::filesystem::path& a_path) {
+	GetIni(a_path, [](const std::filesystem::path& a_path, CSimpleIniA& a_ini) {
+		Settings::GetSingleton()->SaveMasterIni(a_ini);
+		const std::wstring wide_path = a_path.wstring();
+		a_ini.SaveFile(wide_path.c_str());
+	});
+
+}
+
+void Settings::SaveMasterIni(CSimpleIniA& a_ini) {
+	a_ini.SetValue("Input", "ShowMenuKey", std::to_string(config.showMenuKey).c_str());
+	if (!config.selectedProfile.empty()) {
+		a_ini.SetValue("Profiles", "Current", config.selectedProfile.c_str());
+	}
 }

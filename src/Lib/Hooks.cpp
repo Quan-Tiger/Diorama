@@ -30,7 +30,7 @@ struct BSInputDeviceManager_PollInputDevices
 			}
 		}
 
-		if (blockedDevice && inputManager->ShouldSwallowInput()) {  //the menu is open, eat all keypresses
+		if (blockedDevice && globals::menuOpen) {  //the menu is open, eat all keypresses
 			constexpr RE::InputEvent* const dummy[] = { nullptr };
 			func(a_dispatcher, dummy);
 			return;
