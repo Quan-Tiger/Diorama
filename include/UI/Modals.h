@@ -33,6 +33,7 @@ namespace UI {
 			const char* name,
 			const cm_func_t& a_func,
 			const std::optional<float>& a_twsz,
+			bool& isCancelled,
 			const char* text);
 
 		template <class... Args>
@@ -40,6 +41,7 @@ namespace UI {
 			const char* name,
 			const cm_func_t& a_func,
 			const std::optional<float>& a_twsz,
+			bool& isCancelled,
 			const char* text,
 			Args... args);
 
@@ -139,10 +141,18 @@ namespace UI {
 					"##slt_input",
 					std::addressof(a_out),
 					a_flags);
+			
+			if (ImGui::BeginPopupContextItem())
+			{
+				if (ImGui::Selectable("Paste")) a_out = ImGui::GetClipboardText();
+				ImGui::EndPopup();
+			}
+
+			if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_V))
+				a_out = ImGui::GetClipboardText();
 
 			if (inputResult)
 			{
-				logger::info("inputResult true");
 				ImGui::CloseCurrentPopup();
 				ret = true;
 			}
@@ -210,6 +220,7 @@ namespace UI {
 		const char* name,
 		const cm_func_t& a_func,
 		const std::optional<float>& a_twsz,
+		bool& isCancelled,
 		const char* text,
 		Args... args)
 		-> bool
@@ -277,6 +288,7 @@ namespace UI {
 			{
 				ImGui::CloseCurrentPopup();
 				ret = false;
+				isCancelled = true;
 			}
 
 			ImGui::EndPopup();

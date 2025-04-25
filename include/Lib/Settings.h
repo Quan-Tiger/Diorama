@@ -18,15 +18,21 @@ class Settings
 
 		static inline const std::string main_path = "Data/Diorama";
 		static inline const std::string ini_path = main_path + "/Diorama.ini";
-		static inline const std::string json_path = main_path + "/json";
+		static inline const std::string json_path = main_path + "/profiles";
 
 		struct Config
 		{
 			uint32_t showMenuKey = 209;
 			uint32_t showMenuModifier = 0;
+			uint32_t maxDistanceFromPlayer = 4096;
 			std::string selectedProfile = "";
+			std::string tintColour = "FF0000aa";
+			std::string tintColourNotMatched = "FFaa00aa";
 			bool pauseGame = false;
 			bool disableInMenu = false;
+			bool spawnNew = true;
+			bool checkReferencesOnOpen = true;
+			bool checkReferencesOnClose = true;
 		};
 
 		Config config;
@@ -61,7 +67,7 @@ class Settings
 				return std::format("{:.3f}", a_style);
 			}
 			else if constexpr (std::is_same_v<bool, T>) {
-				return a_style ? "true" : "false";
+				return a_style ? "1" : "0";
 			}
 			else if constexpr (std::is_same_v<int, T>) {
 				return std::to_string(a_style);

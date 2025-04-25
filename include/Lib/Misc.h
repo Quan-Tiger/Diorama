@@ -24,7 +24,30 @@ namespace Misc {
 
     /////////
 
-    std::string GetModName(RE::TESObjectREFR* ref);
+    std::string GetModName(RE::TESForm* ref);
     std::string FormIdToHex(uint32_t FormID);
+    uint64_t ParseFormID(std::string FormID);
+    bool HexMatchesFormID(std::string toCheck);
+
+    template <class T>
+    static T* ParseFormIDFromMod(const std::string& id, const std::string& mod)
+    {
+        if (mod.empty()) {
+            return RE::TESForm::LookupByID<T>(Misc::ParseFormID(id));
+        }
+
+        RE::FormID localFormID;
+        std::istringstream{ id } >> std::hex >> localFormID;
+
+        RE::FormID formID = RE::TESDataHandler::GetSingleton()->LookupFormID(localFormID, mod);
+        T* form = RE::TESForm::LookupByID<T>(formID);
+        if (form) {
+            return form;
+        }
+        else {
+            return RE::TESForm::LookupByID<T>(Misc::ParseFormID(id));
+        }
+    }
+
 }
 

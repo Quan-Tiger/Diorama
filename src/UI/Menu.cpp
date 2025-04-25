@@ -34,24 +34,23 @@ void Menu::Init()
 	// Setup Platform/Renderer backends
 	ImGui_ImplWin32_Init(desc.OutputWindow);
 	ImGui_ImplDX11_Init(globals::d3d::device, globals::d3d::context);
-	Diorama::profiles = {};
 
-	if (std::filesystem::exists(Settings::json_path)) {
-		logger::info("Json directory found");
-		for (const auto& entry : std::filesystem::directory_iterator(Settings::json_path))
-		{
-			std::string profile = entry.path().stem().generic_string();
-			logger::info("Profile found: {}", profile);
-			Diorama::profiles.push_back(profile);
-		}
-	}
-	if (Diorama::references.size() > 0) {
-		selectedHistory = Diorama::references.front();
-	}
+	config = Settings::GetSingleton()->config;
 }
 
 void Menu::DrawOverlay()
 {
+	if (Diorama::TryMoveToCell()) {
+		return;
+	}
+
+	if (checkTinting) {
+		for (auto& ref : Diorama::references) {
+			Diorama::TintReference(ref);
+		}
+		checkTinting = false;
+	}
+
 	if (!globals::menuOpen) {
 		return;
 	}
@@ -59,28 +58,426 @@ void Menu::DrawOverlay()
 	ImGui_ImplDX11_NewFrame();
 	ImGui_ImplWin32_NewFrame();
 	ImGui::NewFrame();
+	auto width = (ImGui::GetMainViewport()->Size.x - 20) * 0.25f;
+	auto height = ImGui::GetMainViewport()->Size.y - 20;
 	ImGui::SetNextWindowPos(ImVec2(10, 10));
-	ImGui::SetNextWindowSize(ImVec2(1000, 1000));
+	ImGui::SetNextWindowSize(ImVec2(width, height));
 
 	ImGui::Begin("Diorama", nullptr, ImGuiWindowFlags_MenuBar);
 
+	if (!checkedOnOpen && config.checkReferencesOnOpen && Diorama::references.size() > 0 && Diorama::currentProfile != nullptr) {
+		logger::info("Checking for changes compared to profile");
+		for (auto& ref : Diorama::references) {
+			ref.matchesProfile = Diorama::ReferenceMatchesWorld(ref);
+			if (!ref.matchesProfile) {
+				openRestoreAllPopup = true;
+				break;
+			}
+		}
+
+		checkedOnOpen = true;
+	}
+
+	if (openRestoreAllPopup) {
+		ImGui::OpenPopup("RestoreAllOnOpenPopup");
+	}
+
+	if (UI::Modals::ConfirmDialog(
+		"RestoreAllOnOpenPopup",
+		UI::Modals::cm_func_t(),
+		std::optional<float>{},
+		isRestoreCancelled,
+		"%s",
+		"Restore references from profile?"))
+	{
+		Menu::RestoreAll();
+		openRestoreAllPopup = false;
+	}
+
+	if (isRestoreCancelled) {
+		openRestoreAllPopup = false;
+		isRestoreCancelled = false;
+	}
+
+	if (requestedClose) {
+		logger::info("Requested close");
+		if (!checkedOnClose && config.checkReferencesOnClose && Diorama::references.size() > 0 && Diorama::currentProfile != nullptr) {
+			logger::info("Checking for unsaved changes");
+			for (auto& ref : Diorama::references) {
+				if (!ref.Saved) {
+					logger::info("Unsaved found");
+					openSavePopup = true;
+					break;
+				}
+			}
+			requestedClose = false;
+		}
+
+		if (!openSavePopup) {
+			logger::info("No unsaved changes found");
+			requestedClose = false;
+			Menu::Close();
+			return;
+		}
+
+		checkedOnClose = true;
+	}
+
+	if (openSavePopup) {
+		ImGui::OpenPopup("SaveChangesPopup");
+	}
+
+	if (UI::Modals::ConfirmDialog(
+		"SaveChangesPopup",
+		UI::Modals::cm_func_t(),
+		std::optional<float>{},
+		isSaveCancelled,
+		"%s",
+		"Save changes?"))
+	{
+		logger::info("Popup returned okay");
+		Diorama::Store();
+		openSavePopup = false;
+		requestedClose = false;
+		Menu::Close();
+		return;
+	}
+
+	if (isSaveCancelled) {
+		logger::info("Popup returned cancel");
+		openSavePopup = false;
+		isSaveCancelled = false;
+		requestedClose = false;
+		Menu::Close();
+		return;
+	}
+
+	ImGui::SeparatorText("Profiles");
+
+	ProfilesSection();
+
+	ImGui::SeparatorText("References");
+
+	if (Diorama::currentProfile != nullptr) {
+
+		ReferenceControlSection();
+
+		if (Diorama::references.size() > 0) {
+
+			{
+				ImGui::BeginChild("ChildL", ImVec2(ImGui::GetContentRegionAvail().x * 0.3f, 260), ImGuiChildFlags_None);
+				ImGui::BeginListBox("##RefList");
+
+				int i = 0;
+				for (Diorama::tesRef& ref : Diorama::references) {
+					ref.IsSelected = (item_selected_idx == i);
+
+					std::string value;
+					if (!ref.Saved) {
+						value += "*";
+					}
+					value += ref.FormID;
+
+					if (ImGui::Selectable(value.c_str(), ref.IsSelected))
+					{
+						item_selected_idx = i;
+					}
+
+					// Set the initial focus when opening the combo (scrolling + keyboard navigation focus)
+					if (ref.IsSelected)
+						ImGui::SetItemDefaultFocus();
+
+					i++;
+				}
+
+				ImGui::EndListBox();
+				ImGui::EndChild();
+			}
+
+			ImGui::SameLine();
+
+			{
+				ImGui::BeginChild("ChildR", ImVec2(0, 500), ImGuiChildFlags_None);
+				for (Diorama::tesRef& ref : Diorama::references) {
+					if (ref.IsSelected) {
+						std::string disabled = ref.IsDisabled ? "true" : "false";
+						if (ImGui::BeginTable("details", 2))
+						{
+							ImGui::TableNextRow();
+							ImGui::TableSetColumnIndex(0);
+							ImGui::Text("Form ID:");
+							ImGui::TableSetColumnIndex(1);
+							ImGui::Text("Name:");
+							ImGui::TableNextRow();
+							ImGui::TableSetColumnIndex(0);
+							ImGui::Text(ref.FormID.c_str());
+							ImGui::TableSetColumnIndex(1);
+							ImGui::Text(ref.Name.c_str());
+							ImGui::TableNextRow();
+
+							ImGui::TableNextRow();
+							ImGui::TableSetColumnIndex(0);
+							ImGui::Text("Position X:");
+							ImGui::TableSetColumnIndex(1);
+							ImGui::Text("Rotation X:");
+							ImGui::TableNextRow();
+							ImGui::TableSetColumnIndex(0);
+							ImGui::Text(std::to_string(ref.PositionX).c_str());
+							ImGui::TableSetColumnIndex(1);
+							ImGui::Text(std::to_string(ref.AngleX).c_str());
+							ImGui::TableNextRow();
+
+							ImGui::TableNextRow();
+							ImGui::TableSetColumnIndex(0);
+							ImGui::Text("Position Y:");
+							ImGui::TableSetColumnIndex(1);
+							ImGui::Text("Rotation Y:");
+							ImGui::TableNextRow();
+							ImGui::TableSetColumnIndex(0);
+							ImGui::Text(std::to_string(ref.PositionY).c_str());
+							ImGui::TableSetColumnIndex(1);
+							ImGui::Text(std::to_string(ref.AngleY).c_str());
+							ImGui::TableNextRow();
+
+							ImGui::TableNextRow();
+							ImGui::TableSetColumnIndex(0);
+							ImGui::Text("Position Z:");
+							ImGui::TableSetColumnIndex(1);
+							ImGui::Text("Rotation Z:");
+							ImGui::TableNextRow();
+							ImGui::TableSetColumnIndex(0);
+							ImGui::Text(std::to_string(ref.PositionZ).c_str());
+							ImGui::TableSetColumnIndex(1);
+							ImGui::Text(std::to_string(ref.AngleZ).c_str());
+							ImGui::TableNextRow();
+
+							ImGui::TableNextRow();
+							ImGui::TableSetColumnIndex(0);
+							ImGui::Text("Scale:");
+							ImGui::TableSetColumnIndex(1);
+							ImGui::Text("Disabled:");
+							ImGui::TableNextRow();
+							ImGui::TableSetColumnIndex(0);
+							ImGui::Text(std::to_string(ref.Scale).c_str());
+							ImGui::TableSetColumnIndex(1);
+							ImGui::Text(disabled.c_str());
+							ImGui::TableNextRow();
+
+							ImGui::TableNextRow();
+							ImGui::TableSetColumnIndex(0);
+							ImGui::Text("Base Form ID:");
+							ImGui::TableSetColumnIndex(1);
+							ImGui::Text("Cell Form ID:");
+							ImGui::TableNextRow();
+							ImGui::TableSetColumnIndex(0);
+							ImGui::Text(ref.baseFormId.c_str());
+							ImGui::TableSetColumnIndex(1);
+							ImGui::Text(ref.cell.c_str());
+
+							ImGui::EndTable();
+						}
+
+						if (ref.IsDisabled) {
+							if (ImGui::Button("Enable")) {
+								logger::info("Enabling {}", ref.FormID);
+								Diorama::ToggleDisable(ref);
+								checkTinting = true;
+							}
+						}
+						else {
+							if (ImGui::Button("Disable")) {
+								logger::info("Disabling {}", ref.FormID);
+								Diorama::ToggleDisable(ref);
+							}
+						}
+
+						if (ImGui::Button("Remove reference")) {
+							logger::info("Removing {}", ref.FormID);
+							ref.IsTinted = false;
+							Diorama::TintReference(ref);
+							Diorama::RemoveObject(ref);
+							break;
+						}
+
+						if (ImGui::Button("Restore from profile")) {
+							Diorama::UpdateFromProfile(ref);
+							checkTinting = true;
+						}
+
+						if (Diorama::PlayerNearRef(ref)) {
+							if (ImGui::Button("Move to reference")) {
+								logger::info("Moving to {}", ref.FormID);
+								Diorama::MoveTo(ref);
+							}
+						}
+						else {
+							if (ImGui::Button("Move to cell")) {
+								Menu::Close();
+								Diorama::PrepMoveToCell(ref);
+							}
+						}
+
+						if (ImGui::Button("Swap Base")) {
+							ImGui::OpenPopup("NewBaseIDModal");
+							newBaseID.clear();
+						}
+
+						if (UI::Modals::TextInputDialog(
+							"NewBaseIDModal",
+							"%s",
+							ImGuiInputTextFlags_EnterReturnsTrue,
+							{},
+							{},
+							false,
+							newBaseID,
+							"New Base FormID"))
+						{
+							logger::info("Updating base ID of {} to {}", ref.FormID, newBaseID);
+							Diorama::SwapBase(ref, newBaseID.c_str(), "");
+							checkTinting = true;
+						}
+
+						if (ImGui::Button("Update from world")) {
+							logger::info("Updating from world {}", ref.FormID);
+							Diorama::UpdateFromWorld(ref);
+						}
+
+						if (!tintAll) {
+							if (ImGui::Checkbox("Tint reference", &ref.IsTinted)) {
+								logger::info("Tinting {}", ref.FormID);
+								Diorama::TintReference(ref);
+							}
+						}
+					}
+				}
+				ImGui::EndChild();
+			}
+
+			if (ImGui::Button("Save all references")) {
+				Diorama::Store();
+			}
+
+			if (ImGui::Button("Restore All")) {
+				RestoreAll();
+				checkTinting = true;
+			}
+
+			if (ImGui::Button("Update All")) {
+				logger::info("Updating all");
+				for (auto& ref : Diorama::references) {
+					Diorama::UpdateFromWorld(ref);
+				}
+			}
+
+			if (ImGui::Checkbox("Tint all references", &tintAll)) {
+				logger::info("Tinting all");
+				for (auto& ref : Diorama::references) {
+					ref.IsTinted = tintAll;
+					Diorama::TintReference(ref);
+				}
+			}
+		}
+	}
+	else {
+		ImGui::Text("Create a profile to get started.");
+	}
+
+	ImGui::End();
+	ImGui::EndFrame();
+
+	ImGui::Render();
+	ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+}
+
+void Menu::RestoreAll()
+{
+	logger::info("Restoring all");
+	for (auto& ref : Diorama::references) {
+		Diorama::UpdateFromProfile(ref);
+	}
+}
+
+void Menu::ReferenceControlSection()
+{
+	if (ImGui::Button("Add Targeted")) {
+		Diorama::SelectObjectInView();
+		Diorama::AddObject(Diorama::GetSelectedObject());
+		item_selected_idx = Diorama::references.size() - 1;
+		if (tintAll) {
+			Diorama::references.back().IsTinted = tintAll;
+			Diorama::TintReference(Diorama::references.back());
+		}
+	}
+
+	ImGui::SameLine();
+
+	if (ImGui::Button("Add From Console")) {
+		Diorama::SelectFromConsole();
+		Diorama::AddObject(Diorama::GetSelectedObject());
+		item_selected_idx = Diorama::references.size() - 1;
+		if (tintAll) {
+			Diorama::references.back().IsTinted = tintAll;
+			Diorama::TintReference(Diorama::references.back());
+		}
+	}
+
+	ImGui::SameLine();
+
+	if (ImGui::Button("Add From ID")) {
+		ImGui::OpenPopup("AddFromIDModel");
+		addFromID.clear();
+		item_selected_idx = Diorama::references.size() - 1;
+		if (tintAll) {
+			Diorama::references.back().IsTinted = tintAll;
+			Diorama::TintReference(Diorama::references.back());
+		}
+	}
+
+	if (UI::Modals::TextInputDialog(
+		"AddFromIDModel",
+		"%s",
+		ImGuiInputTextFlags_EnterReturnsTrue,
+		{},
+		{},
+		false,
+		addFromID,
+		"Add from FormID"))
+	{
+		RE::TESObjectREFR* form = RE::TESForm::LookupByID<RE::TESObjectREFR>(Misc::ParseFormID(addFromID));
+		Diorama::AddObject(form);
+	}
+}
+
+void Menu::ProfilesSection()
+{
 	if (ImGui::BeginCombo("##combo", Diorama::currentProfile)) // The second parameter is the label previewed before opening the combo.
 	{
 		for (const auto& profileStr : Diorama::profiles)
 		{
 			auto* profile = profileStr.c_str();
 			bool is_selected = (Diorama::currentProfile == profile); // You can store your selection however you want, outside or inside your objects
-			if (ImGui::Selectable(profile, is_selected))
-				Diorama::SetAndSaveProfile(profile);
+			if (ImGui::Selectable(profile, is_selected)) {
+				Diorama::SetProfile(profile);
+				Diorama::SaveProfile(profile);
+				checkedOnOpen = false;
+			}
 			if (is_selected)
 				ImGui::SetItemDefaultFocus();   // You may set the initial focus when opening the combo (scrolling + for keyboard navigation support)
 		}
 		ImGui::EndCombo();
 	}
 
+	ImGui::SameLine();
+
 	if (ImGui::Button("+")) {
 		ImGui::OpenPopup("ProfileName");
 		newProfile.clear();
+	}
+
+	ImGui::SameLine();
+
+	if (ImGui::Button("-")) {
+		ImGui::OpenPopup("ConfirmDeleteProfile");
 	}
 
 	if (UI::Modals::TextInputDialog(
@@ -97,167 +494,25 @@ void Menu::DrawOverlay()
 		Diorama::AddProfile(newProfile.c_str());
 	}
 
-	if (ImGui::Button("-")) {
-		ImGui::OpenPopup("ConfirmDeleteProfile");
-	}
-
+	bool confirmCancelled;
 	if (UI::Modals::ConfirmDialog(
 		"ConfirmDeleteProfile",
 		UI::Modals::cm_func_t(),
 		std::optional<float>{},
+		confirmCancelled,
 		"%s",
 		"Delete the selected profile?"))
 	{
 		Diorama::RemoveProfile(Diorama::currentProfile);
 	}
-
-	ImGui::Separator();
-
-	if (ImGui::Button("Select By Target")) {
-		Diorama::SelectObjectInView();
-	}
-
-	if (ImGui::Button("Select From Console")) {
-		Diorama::SelectFromConsole();
-	}
-
-	RE::TESObjectREFR* selected = Diorama::GetSelectedObject();
-	//const auto mod = Misc::GetModName(selected);
-	if (selected) {
-		ImGui::Text(std::format("Selected object [{}] name: {}",
-			selected->GetFormID(),
-			selected->GetName()).c_str());
-
-		//ImGui::Text(std::format("Looking at object [{}] name: {}, x: {}, y: {}, z: {}, rotX: {}, rotY: {}, rotZ: {}, scale: {}",
-		//	Misc::FormIdToHex(selected->GetFormID()),
-		//	selected->GetName(),
-		//	selected->GetPositionX(),
-		//	selected->GetPositionY(),
-		//	selected->GetPositionZ(),
-		//	selected->GetAngleX(),
-		//	selected->GetAngleY(),
-		//	selected->GetAngleZ(),
-		//	selected->GetScale()).c_str());
-
-		ImGui::Text(("Position X" + std::to_string(selected->GetPositionX())).c_str());
-		ImGui::Text(("Position Y" + std::to_string(selected->GetPositionY())).c_str());
-		ImGui::Text(("Position Z" + std::to_string(selected->GetPositionZ())).c_str());
-		ImGui::Text(("Rotation X" + std::to_string(selected->GetAngleX())).c_str());
-		ImGui::Text(("Rotation Y" + std::to_string(selected->GetAngleY())).c_str());
-		ImGui::Text(("Rotation Z" + std::to_string(selected->GetAngleZ())).c_str());
-		ImGui::Text(("Scale" + std::to_string(selected->GetScale())).c_str());
-
-		//ImGui::Text(std::format("Mod: {}", mod).c_str());
-
-		if (ImGui::Button("Add Reference")) {
-			logger::info("Storing...");
-			Diorama::AddObject(selected);
-		}
-	}
-	
-	ImGui::Separator();
-
-	if (Diorama::currentProfile != nullptr) {
-
-		if (Diorama::references.size() > 0) {
-
-			// imgui clipper
-			// If hover
-			// Is selected
-			//Diorama::tesRef contextRef;
-			//for (Diorama::tesRef ref : Diorama::references) {
-			//	std::string hexRef = "##" + Misc::FormIdToHex(ref.FormID);
-			//	if (ImGui::BeginChild(hexRef.c_str(), ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoMove)) {
-			//		std::string value;
-			//		if (!ref.Saved) {
-			//			value += "*";
-			//		}
-			//		value += hexRef;
-			//		ImGui::Text(value.c_str());
-
-			//		ImGui::EndChild();
-			//	}
-
-			//	if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
-			//		contextRef = ref;
-			//		logger::info("Right clicked on {}", Misc::FormIdToHex(contextRef.FormID));
-			//		ImGui::OpenPopup("TableViewContextMenu");
-			//	}
-			//}
-
-			//if (ImGui::BeginPopupContextItem("TableViewContextMenu")) {
-			//	if (ImGui::MenuItem("Remove reference")) {
-			//		Diorama::RemoveObject(contextRef);
-			//	}
-			//	ImGui::EndPopup();
-			//}
-			ImGui::Columns(2);
-			ImGui::BeginListBox("##RefList");
-			for (Diorama::tesRef ref : Diorama::references) {
-				std::string value;
-				if (!ref.Saved) {
-					value += "*";
-				}
-				value += ref.FormID;
-				//ImGui::Text(value.c_str());
-				if (ImGui::Selectable(value.c_str(), ref.IsSelected))
-				{
-					logger::info("Selected {}", value);
-					selectedHistory = ref;
-				}
-			}
-			ImGui::EndListBox();
-			ImGui::NextColumn();
-
-			//ImGui::Text(std::format("Selected object [{}] name: {}, x: {}, y: {}, z: {}, rotX: {}, rotY: {}, rotZ: {}, scale: {}",
-			//	Misc::FormIdToHex(selectedHistory.FormID),
-			//	selectedHistory.Name,
-			//	selectedHistory.PositionX,
-			//	selectedHistory.PositionY,
-			//	selectedHistory.PositionZ,
-			//	selectedHistory.AngleX,
-			//	selectedHistory.AngleY,
-			//	selectedHistory.AngleZ,
-			//	selectedHistory.Scale).c_str());
-
-			//ImGui::Text(std::format("Selected object [{}] name: {}",
-			//	selectedHistory.FormID,
-			//	selected->GetName()).c_str());
-
-			ImGui::Text(("Position X" + std::to_string(selectedHistory.PositionX)).c_str());
-			ImGui::Text(("Position Y" + std::to_string(selectedHistory.PositionY)).c_str());
-			ImGui::Text(("Position Z" + std::to_string(selectedHistory.PositionZ)).c_str());
-			ImGui::Text(("Rotation X" + std::to_string(selectedHistory.AngleX)).c_str());
-			ImGui::Text(("Rotation Y" + std::to_string(selectedHistory.AngleY)).c_str());
-			ImGui::Text(("Rotation Z" + std::to_string(selectedHistory.AngleZ)).c_str());
-			ImGui::Text(("Scale" + std::to_string(selectedHistory.Scale)).c_str());
-
-			//ImGui::Text(std::format("Mod: {}", mod).c_str());
-
-			if (ImGui::Button("Add Reference")) {
-				logger::info("Storing...");
-				Diorama::AddObject(selected);
-			}
-		}
-
-		if (ImGui::Button("Save all references")) {
-			Diorama::Store();
-		}
-	}
-
-	ImGui::End();
-	ImGui::EndFrame();
-
-	ImGui::Render();
-	ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 }
 
 void Menu::Open()
 {
-
+	logger::info("Opening menu");
 	const auto UIManager = RE::UI::GetSingleton();
 
-	if (//UIManager->IsMenuOpen("Console") ||         // Text Input
+	if (//UIManager->IsMenuOpen("Console") ||       // Text Input
 		UIManager->IsMenuOpen("Dialogue Menu") ||   // Dialogue
 		UIManager->IsMenuOpen("Crafting Menu") ||   // Text Input
 		UIManager->IsMenuOpen("Training Menu") ||   // Just Incase
@@ -290,6 +545,12 @@ void Menu::Open()
 	}
 
 	globals::menuOpen = true;
+	checkedOnClose = false;
+	Diorama::SelectObject(nullptr);
+}
+
+void Menu::PrepClose() {
+	requestedClose = true;
 }
 
 void Menu::Close()
@@ -311,7 +572,7 @@ void Menu::Close()
 void Menu::Toggle()
 {
 	if (globals::menuOpen) {
-		Close();
+		PrepClose();
 	}
 	else {
 		Open();

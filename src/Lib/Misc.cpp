@@ -436,12 +436,47 @@ std::vector<std::string> Misc::GetLowerCaseComponents(const std::string& s) {
 
 /////////
 
-std::string Misc::GetModName(RE::TESObjectREFR* ref) {
-    auto* array = ref->sourceFiles.array;
-    auto* file = array->back();
-    return file->fileName;
+std::string Misc::GetModName(RE::TESForm* ref) {
+    if (Misc::FormIdToHex(ref->formID).starts_with("0xff")) {
+        return "";
+    }
+    else {
+        auto* array = ref->sourceFiles.array;
+        auto* file = array->front();
+        std::string name = file->fileName;
+
+        //fix for weird bug where refs first defined in Skyrim.Esm aren't always detected properly
+        if (((ref->formID & 0xFF000000) == 0)  //Refs from Skyrim.ESM will have 00 for the first two hexidecimal digits
+            && name != "Skyrim.esm")   //And refs from all other mods will have a non zero value, so a bitwise && of those two digits with FF will be nonzero for all non Skyrim.ESM mods
+        {
+            name = "Skyrim.esm";
+        }
+
+        return name;
+    }
 }
 
 std::string Misc::FormIdToHex(uint32_t FormID) {
-    return std::format("{:#08x}", FormID);
+    return std::format("{:#010x}", FormID);
+}
+
+uint64_t Misc::ParseFormID(std::string FormID) {
+    try
+    {
+        return std::stoll(FormID, 0, 16);
+    }
+    catch (std::invalid_argument const& ex)
+    {
+        logger::info("std::invalid_argument::what(): {}", ex.what());
+    }
+    catch (std::out_of_range const& ex)
+    {
+        logger::info("std::out_of_range::what(): {}", ex.what());
+    }
+    return 0;
+}
+
+bool Misc::HexMatchesFormID(std::string toCheck) {
+    const std::regex formID_regex("^(0x)?[0-9a-f]{3,8}$");
+    return std::regex_match(toCheck, formID_regex);
 }

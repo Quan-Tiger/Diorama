@@ -47,7 +47,7 @@ T GetIniValue(CSimpleIniA& a_ini, const char* section, const char* key, T a_defa
 		return value;
 	}
 	else if constexpr (std::is_same_v<T, bool>) {
-		return value == "true";
+		return value == "1";
 	}
 	else if constexpr (std::is_same_v<T, int>) {
 		return std::stoi(value);
@@ -76,6 +76,12 @@ void Settings::LoadMasterIni(CSimpleIniA& a_ini)
 
 	config.showMenuKey = GetIniValue<uint32_t>(a_ini, "Input", "ShowMenuKey", _default.showMenuKey);
 	config.selectedProfile = GetIniValue<std::string>(a_ini, "Profiles", "Current", _default.selectedProfile);
+	config.spawnNew = GetIniValue<bool>(a_ini, "Settings", "SpawnNew", _default.spawnNew);
+	config.checkReferencesOnOpen = GetIniValue<bool>(a_ini, "Settings", "CheckReferencesOnOpen", _default.checkReferencesOnOpen);
+	config.checkReferencesOnClose = GetIniValue<bool>(a_ini, "Settings", "CheckReferencesOnClose", _default.checkReferencesOnClose);
+	config.maxDistanceFromPlayer = GetIniValue<uint32_t>(a_ini, "Settings", "MaxDistanceFromPlayer", _default.maxDistanceFromPlayer);
+	config.tintColour = GetIniValue<std::string>(a_ini, "UI", "TintColour", _default.tintColour);
+	config.tintColourNotMatched = GetIniValue<std::string>(a_ini, "UI", "TintColourNotMatched", _default.tintColourNotMatched);
 }
 
 void Settings::SaveSettings(const std::filesystem::path& a_path) {
@@ -92,4 +98,10 @@ void Settings::SaveMasterIni(CSimpleIniA& a_ini) {
 	if (!config.selectedProfile.empty()) {
 		a_ini.SetValue("Profiles", "Current", config.selectedProfile.c_str());
 	}
+	a_ini.SetValue("Settings", "SpawnNew", std::to_string(config.spawnNew).c_str());
+	a_ini.SetValue("Settings", "CheckReferencesOnOpen", std::to_string(config.checkReferencesOnOpen).c_str());
+	a_ini.SetValue("Settings", "CheckReferencesOnClose", std::to_string(config.checkReferencesOnClose).c_str());
+	a_ini.SetValue("Settings", "MaxDistanceFromPlayer", std::to_string(config.maxDistanceFromPlayer).c_str());
+	a_ini.SetValue("UI", "TintColour", config.tintColour.c_str());
+	a_ini.SetValue("UI", "TintColourNotMatched", config.tintColourNotMatched.c_str());
 }

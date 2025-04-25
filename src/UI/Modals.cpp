@@ -26,9 +26,10 @@ namespace UI {
 		const char* name,
 		const cm_func_t& a_func,
 		const std::optional<float>& a_twsz,
+		bool& isCancelled,
 		const char* text)
 		-> bool
 	{
-		return ConfirmDialog(name, a_func, a_twsz, "%s", text);
+		return ConfirmDialog(name, a_func, a_twsz, isCancelled, "%s", text);
 	}
 }

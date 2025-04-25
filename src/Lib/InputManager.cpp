@@ -60,12 +60,11 @@ void InputManager::ProcessQueue()
 
 	ImGuiIO& io = ImGui::GetIO();
 	for (auto& event : _keyEventQueue) {
-		if (event.eventType == RE::INPUT_EVENT_TYPE::kChar) {
+		if (globals::menuOpen && event.eventType == RE::INPUT_EVENT_TYPE::kChar) {
 			io.AddInputCharacter(event.keyCode);
 			continue;
 		}
-
-		if (event.device == RE::INPUT_DEVICE::kMouse) {
+		else if (event.device == RE::INPUT_DEVICE::kMouse) {
 			if (globals::menuOpen) {
 				//logger::trace("Detect mouse scan code {} value {} pressed: {}", event.keyCode, event.value, event.IsPressed());
 				if (event.keyCode > 7) {  // middle scroll
@@ -79,12 +78,24 @@ void InputManager::ProcessQueue()
 			}
 		}
 		else if (event.device == RE::INPUT_DEVICE::kKeyboard) {
-			if (!event.IsPressed()) {
-				if (event.keyCode == showMenuKey) {
-					if (!globals::menuOpen) {
-						//Diorama::SelectObjectInView();
+			if (event.keyCode == showMenuKey && event.IsDown()) {
+				Menu::GetSingleton()->Toggle();
+				break;
+			}
+			if (globals::menuOpen) {
+				const ImGuiKey imGuiKey = InputManager::ScanCodeToImGuiKey(event.keyCode);
+
+				if (event.keyCode == 0x01 && event.IsDown()) {  // esc
+					Menu::GetSingleton()->PrepClose();
+					break;
+				}
+
+				// IMPORTANT: We break out of the above code on escape to prevent unpaired press/release events.
+				if (InputManager::IsKeyboardTextShortcut(imGuiKey)) {
+					if (globals::menuOpen && io.WantTextInput) {
+						io.ClearInputKeys();
+						io.AddKeyEvent(imGuiKey, event.IsDown());
 					}
-					Menu::GetSingleton()->Toggle();
 				}
 			}
 		}
