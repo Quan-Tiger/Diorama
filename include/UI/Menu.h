@@ -15,6 +15,7 @@ public:
 		return &menu;
 	}
 
+	static inline Diorama::tesRef* selected;
 	static inline bool checkedOnOpen = false;
 	static inline bool checkedOnClose = true;
 	static inline bool requestedClose = false;
@@ -34,6 +35,9 @@ public:
 
 	void Init();
 	void DrawOverlay();
+	void AllReferencesControls();
+	bool CheckSaveProfile();
+	void CheckRestoreAll();
 	void RestoreAll();
 	void Open();
 	void Close();
